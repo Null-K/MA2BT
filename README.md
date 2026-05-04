@@ -1,13 +1,12 @@
 # MA2BT
 
-用于 **VRChat Avatar** 的 **Modular Avatar** 转 **BlendTree** 优化器
+> 用于 **VRChat Avatar** 的 **Modular Avatar** 转 **BlendTree** 优化器
 
 MA2BT 会在 Modular Avatar 构建流程结束后运行，将符合条件的 Animator 层合并为一个 Direct BlendTree，从而减少 FX 层数量并提升 Avatar 性能。
 
 ## 工作原理
 
-Modular Avatar 会为每一个响应式属性（Object Toggle、Material Setter、Shape Changer 等）生成一个独立的 Animator 层。这些层在运行时会带来额外开销。
-
+Modular Avatar 会为每一个响应式属性（Object Toggle、Material Setter、Shape Changer 等）生成一个独立的 Animator 层，这些层在运行时会带来额外开销。  
 MA2BT 会在构建完成后分析这些生成的层，并将其中简单的结构转换为一个共享层中的 BlendTree 节点。
 
 ```
