@@ -69,3 +69,7 @@ MA_To_BlendTree_Layer    (1 Layer, 1 Direct BlendTree)
 - **多参数 AND 条件** — 例如：同时依赖菜单参数和父物体状态（`__ActiveSelfProxy`）
 - **非瞬时过渡** — 存在混合时间（blend duration）
 - **复杂状态机结构** — 包含子状态机或 AnyState 过渡
+
+## 鸣谢
+
+[丨丿・丶乛](https://space.bilibili.com/299071021) - 视频提供灵感
