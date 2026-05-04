@@ -1,11 +1,12 @@
 using UnityEngine;
+using VRC.SDKBase;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
 [AddComponentMenu("MA2BT/MA2BT")]
 [DisallowMultipleComponent]
-public class MAToBlendTree : MonoBehaviour
+public class MAToBlendTree : MonoBehaviour, IEditorOnly
 {
     [Tooltip("Compact mode: only generate thresholds where animations exist, reducing empty clips.")]
     public bool compactMode = true;
