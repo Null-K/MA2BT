@@ -36,8 +36,7 @@ MA_To_BlendTree_Layer    (1 Layer, 1 Direct BlendTree)
 
 ## 安装方法
 
-1. 将 `MA2BT` 文件夹导入到 Unity 项目的 `Assets/` 目录下
-2. 完成，无需额外配置，插件会自动注册到 NDMF
+- VCC: `https://null-k.github.io/vpm-listing/index`
 
 ## 使用方法
 
