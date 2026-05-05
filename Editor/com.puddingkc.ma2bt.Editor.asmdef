@@ -1,0 +1,23 @@
+{
+  "name": "com.puddingkc.ma2bt.Editor",
+  "rootNamespace": "",
+  "references": [
+    "com.puddingkc.ma2bt.Runtime",
+    "nadena.dev.ndmf",
+    "nadena.dev.ndmf.runtime",
+    "nadena.dev.modular-avatar.core",
+    "VRC.SDK3A",
+    "VRC.SDKBase"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
