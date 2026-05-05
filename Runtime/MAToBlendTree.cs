@@ -23,7 +23,7 @@ public class MAToBlendTree : MonoBehaviour, IEditorOnly
 public class MAToBlendTreeEditor : Editor
 {
     static readonly Color HeaderColor = new Color(0.55f, 0.2f, 0.85f);
-    const string VERSION = "2.0.0";
+    const string VERSION = "2.0.1";
 
     public override void OnInspectorGUI()
     {
