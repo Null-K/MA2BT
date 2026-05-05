@@ -1,6 +1,7 @@
 # MA2BT
 
-> 用于 **VRChat Avatar** 的 **Modular Avatar** 转 **BlendTree** 优化器
+> 用于 **VRChat Avatar** 的 **Modular Avatar** 转 **BlendTree** 优化器  
+> 遇到问题可以在官方 QQ 群 **1047423396** 中反馈
 
 MA2BT 会在 Modular Avatar 构建流程结束后运行，将符合条件的 Animator 层合并为一个 Direct BlendTree，从而减少 FX 层数量并提升 Avatar 性能。
 
@@ -72,4 +73,4 @@ MA_To_BlendTree_Layer    (1 Layer, 1 Direct BlendTree)
 
 ## 鸣谢
 
-[丨丿・丶乛](https://space.bilibili.com/299071021) - 视频提供灵感
+[丨丿・丶乛](https://space.bilibili.com/299071021) - 视频提供了灵感。本插件最初基于 `浊鸷` 的插件进行修改，随后在保留部分命名的基础上对整体逻辑进行了重构。
