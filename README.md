@@ -45,6 +45,9 @@ MA_To_BlendTree_Layer    (1 Layer, 1 Direct BlendTree)
 3. 正常构建 Avatar，MA2BT 会在优化阶段自动运行
 4. 在 Console 中查看 `[MA2BT]` 日志了解转换结果
 
+> ※ 如果你安装了 AAO 或其他会合并动画层的插件，生成的 MA_To_BlendTree_Layer 层会被这些插件进一步合并。  
+> 可以先移除其他优化插件来测试合并的数量和效果。
+
 ## 选项说明
 
 | 选项 | 默认值 | 说明 |
