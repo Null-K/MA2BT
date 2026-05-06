@@ -53,11 +53,11 @@ MA_To_BlendTree_Layer    (1 Layer, 1 Direct BlendTree)
 
 ## 設定項目
 
-| 选项 | 默认值 | 说明 |
+| 項目 | デフォルト | 説明 |
 |---|---|---|
-| **Compact Mode** | 开启 | 仅在实际存在动画的数值上生成 BlendTree 阈值，减少空动画 |
-| **Multi-State Layers** | 关闭 | 尝试转换包含多个条件状态的层（如多值 int 参数），默认关闭以保证安全 |
-| **Scan All Layers** | 关闭 | 不仅扫描 MA 生成的层，也会扫描所有符合模式的 FX 层 |
+| **Compact Mode** | ON | 実際にアニメーションが存在する数値に対してのみ閾値を生成し、空のアニメーションを削減します。 |
+| **Multi-State Layers** | OFF | 複数の条件状態（多値 int パラメータなど）を持つレイヤーの変換を試みます。安全のためデフォルトは OFF です。 |
+| **Scan All Layers** | OFF | MA が生成したレイヤーだけでなく、パターンに一致するすべての FX レイヤーをスキャンします。 |
 
 ## 変換の条件
 
