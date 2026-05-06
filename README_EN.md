@@ -3,7 +3,7 @@
 ## [简体中文](README.md) | [English](README_EN.md) | [日本語](README_JP.md)
 
 > **Modular Avatar** to **BlendTree** optimizer for **VRChat Avatars**  
-> For feedback or issues, please join the official QQ group: **1047423396**
+> Having issues? Please report them via [GitHub Issues](../../issues). I will do my best to address and fix them.
 
 MA2BT runs at the end of the Modular Avatar build process. It merges eligible Animator layers into a single Direct BlendTree, reducing the number of FX layers and improving avatar performance.
 
