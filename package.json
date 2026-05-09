@@ -1,6 +1,6 @@
 {
     "name": "com.puddingkc.ma2bt",
-    "version": "1.0.0",
+    "version": "2.0.2",
     "displayName": "MA2BT",
     "description": "Convert Modular Avatar responsive components into BlendTrees",
     "unity": "2019.4",

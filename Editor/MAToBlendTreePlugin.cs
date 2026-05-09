@@ -40,7 +40,7 @@ internal class MAToBlendTreePlugin : Plugin<MAToBlendTreePlugin>
     }
 }
 
-#region  ˝æ›
+#region Êï∞ÊçÆ
 
 internal class AnalyzedLayer
 {
@@ -60,6 +60,21 @@ internal class StateInfo
     public float ThresholdLo = float.NaN;
     public float ThresholdHi = float.NaN;
     public VirtualMotion Motion;
+    public List<SecondaryCondition> SecondaryConditions = new();
+}
+
+internal class SecondaryCondition
+{
+    public string ParameterName;
+    public bool ActiveWhenGreater;
+    public float Threshold = 0.5f;
+}
+
+internal class ResolvedState
+{
+    public StateInfo ActiveState;
+    public StateInfo InactiveState;
+    public List<SecondaryCondition> SecondaryConditions = new();
 }
 
 internal class ParameterGroup
@@ -117,17 +132,17 @@ internal class LayerToBlendTreeOptimizer
         string externalNote = externalCount > 0 ? $" (including {externalCount} non-MA layers)" : "";
         Debug.Log($"[MA2BT] Found {convertibleLayers.Count} convertible layers{externalNote}, {rejectedCount} kept layers.");
 
-        // ∞¥≤Œ ˝∑÷◊È
+        // ÊåâÂèÇÊï∞ÂàÜÁªÑ
         var paramGroups = GroupByParameter(convertibleLayers);
 
-        // ππΩ®ªÏ∫œ ˜
+        // ÊûÑÂª∫Ê∑∑ÂêàÊ†ë
         var rootBlendTree = BuildRootBlendTree(paramGroups);
 
-        // ◊¢»ÎµΩ FX
+        // Ê≥®ÂÖ•Âà∞ FX
         EnsureFloatParameter(ROOT_PARAM, 1f);
         InjectBlendTreeLayer(rootBlendTree);
 
-        // “∆≥˝◊™ªª∫Ûµƒ≤„
+        // ÁßªÈô§ËΩ¨Êç¢ÂêéÁöÑÂ±Ç
         var layersToRemove = new HashSet<VirtualLayer>(convertibleLayers.Select(l => l.Layer));
         _fx.RemoveLayers(l => layersToRemove.Contains(l));
 
@@ -140,7 +155,7 @@ internal class LayerToBlendTreeOptimizer
         }
     }
 
-    #region …®√Ë
+    #region Êâ´Êèè
 
     List<AnalyzedLayer> AnalyzeAllLayers()
     {
@@ -262,7 +277,8 @@ internal class LayerToBlendTreeOptimizer
                 IsDefault = false,
                 ThresholdLo = analysisResult.ThresholdLo,
                 ThresholdHi = analysisResult.ThresholdHi,
-                Motion = state.Motion
+                Motion = state.Motion,
+                SecondaryConditions = analysisResult.SecondaryConditions
             });
         }
 
@@ -329,47 +345,110 @@ internal class LayerToBlendTreeOptimizer
         if (conditions.Count == 0)
             return TransitionAnalysisResult.Fail("No conditions");
 
-        var paramNames = conditions.Select(c => c.parameter).Distinct().ToList();
-        if (paramNames.Count != 1)
+        if (isInverted && conditions.Select(c => c.parameter).Distinct().Count() != 1)
         {
             return TransitionAnalysisResult.Fail(
-                $"Multiple parameters in AND conditions: {string.Join(", ", paramNames)}");
+                "Inverted multi-parameter AND conditions are not supported");
         }
 
-        string paramName = paramNames[0];
-        float lo = float.NegativeInfinity;
-        float hi = float.PositiveInfinity;
+        var groupedConditions = conditions.GroupBy(c => c.parameter).ToList();
+        var parameterRanges = new List<(string ParameterName, float Lo, float Hi)>();
 
-        foreach (var cond in conditions)
+        foreach (var group in groupedConditions)
         {
-            switch (cond.mode)
+            float lo = float.NegativeInfinity;
+            float hi = float.PositiveInfinity;
+
+            foreach (var cond in group)
             {
-                case AnimatorConditionMode.Greater:
-                    lo = Math.Max(lo, cond.threshold);
-                    break;
-                case AnimatorConditionMode.Less:
-                    hi = Math.Min(hi, cond.threshold);
-                    break;
-                case AnimatorConditionMode.Equals:
-                case AnimatorConditionMode.NotEqual:
-                    return TransitionAnalysisResult.Fail(
-                        $"Unsupported condition mode: {cond.mode}");
-                case AnimatorConditionMode.If:
-                    lo = 0.5f;
-                    break;
-                case AnimatorConditionMode.IfNot:
-                    hi = 0.5f;
-                    break;
+                switch (cond.mode)
+                {
+                    case AnimatorConditionMode.Greater:
+                        lo = Math.Max(lo, cond.threshold);
+                        break;
+                    case AnimatorConditionMode.Less:
+                        hi = Math.Min(hi, cond.threshold);
+                        break;
+                    case AnimatorConditionMode.Equals:
+                    case AnimatorConditionMode.NotEqual:
+                        return TransitionAnalysisResult.Fail(
+                            $"Unsupported condition mode: {cond.mode}");
+                    case AnimatorConditionMode.If:
+                        lo = Math.Max(lo, 0.5f);
+                        break;
+                    case AnimatorConditionMode.IfNot:
+                        hi = Math.Min(hi, 0.5f);
+                        break;
+                }
             }
+
+            if (lo >= hi)
+            {
+                return TransitionAnalysisResult.Fail(
+                    $"Invalid condition range for parameter \"{group.Key}\": {lo}..{hi}");
+            }
+
+            parameterRanges.Add((group.Key, lo, hi));
+        }
+
+        var mainRange = parameterRanges
+            .Where(r => !r.ParameterName.StartsWith("__ActiveSelfProxy", StringComparison.Ordinal)
+                && float.IsFinite(r.Lo)
+                && float.IsFinite(r.Hi))
+            .OrderByDescending(r => r.Hi - r.Lo)
+            .FirstOrDefault();
+
+        if (mainRange.ParameterName == null)
+        {
+            mainRange = parameterRanges
+                .Where(r => float.IsFinite(r.Lo) && float.IsFinite(r.Hi))
+                .OrderBy(r => r.ParameterName.StartsWith("__ActiveSelfProxy", StringComparison.Ordinal) ? 1 : 0)
+                .ThenByDescending(r => r.Hi - r.Lo)
+                .FirstOrDefault();
+        }
+
+        if (mainRange.ParameterName == null)
+        {
+            mainRange = parameterRanges
+                .Where(r => float.IsFinite(r.Lo) || float.IsFinite(r.Hi))
+                .OrderBy(r => r.ParameterName.StartsWith("__ActiveSelfProxy", StringComparison.Ordinal) ? 1 : 0)
+                .FirstOrDefault();
+        }
+
+        if (mainRange.ParameterName == null)
+        {
+            return TransitionAnalysisResult.Fail("Failed to identify main parameter");
+        }
+
+        var secondaryConditions = new List<SecondaryCondition>();
+        foreach (var range in parameterRanges)
+        {
+            if (range.ParameterName == mainRange.ParameterName) continue;
+
+            bool hasLower = float.IsFinite(range.Lo);
+            bool hasUpper = float.IsFinite(range.Hi);
+            if (hasLower == hasUpper)
+            {
+                return TransitionAnalysisResult.Fail(
+                    $"Secondary parameter \"{range.ParameterName}\" must be a simple boolean condition");
+            }
+
+            secondaryConditions.Add(new SecondaryCondition
+            {
+                ParameterName = range.ParameterName,
+                ActiveWhenGreater = hasLower,
+                Threshold = hasLower ? range.Lo : range.Hi
+            });
         }
 
         return new TransitionAnalysisResult
         {
             Success = true,
-            ParameterName = paramName,
-            ThresholdLo = lo,
-            ThresholdHi = hi,
-            IsInverted = isInverted
+            ParameterName = mainRange.ParameterName,
+            ThresholdLo = mainRange.Lo,
+            ThresholdHi = mainRange.Hi,
+            IsInverted = isInverted,
+            SecondaryConditions = secondaryConditions
         };
     }
 
@@ -381,6 +460,7 @@ internal class LayerToBlendTreeOptimizer
         public float ThresholdLo;
         public float ThresholdHi;
         public bool IsInverted;
+        public List<SecondaryCondition> SecondaryConditions;
 
         public static TransitionAnalysisResult Fail(string reason) =>
             new TransitionAnalysisResult { Success = false, Reason = reason };
@@ -388,7 +468,7 @@ internal class LayerToBlendTreeOptimizer
 
     #endregion
 
-    #region ∑÷◊È
+    #region ÂàÜÁªÑ
 
     List<ParameterGroup> GroupByParameter(List<AnalyzedLayer> layers)
     {
@@ -408,6 +488,15 @@ internal class LayerToBlendTreeOptimizer
         {
             ComputeThresholds(group);
             EnsureFloatParameter(group.ParameterName);
+
+            foreach (var secondaryParam in group.Layers
+                .SelectMany(l => l.States)
+                .SelectMany(s => s.SecondaryConditions)
+                .Select(c => c.ParameterName)
+                .Distinct())
+            {
+                EnsureFloatParameter(secondaryParam);
+            }
         }
 
         return groups.Values.ToList();
@@ -430,19 +519,24 @@ internal class LayerToBlendTreeOptimizer
                 {
                     float center = (lo + hi) / 2f;
                     valueSet.Add(Mathf.Round(center));
+                    AddNearbyThresholdSamples(valueSet, lo, hi);
                 }
                 else if (float.IsFinite(lo))
                 {
                     valueSet.Add(Mathf.Round(lo + 0.5f));
+                    valueSet.Add(Mathf.Round(lo - 0.5f));
                 }
                 else if (float.IsFinite(hi))
                 {
                     valueSet.Add(Mathf.Round(hi - 0.5f));
+                    valueSet.Add(Mathf.Round(hi + 0.5f));
                 }
             }
         }
 
         valueSet.Add(0);
+
+        valueSet.RemoveWhere(v => v < 0 || float.IsNaN(v) || float.IsInfinity(v));
 
         if (_settings.compactMode)
         {
@@ -451,10 +545,28 @@ internal class LayerToBlendTreeOptimizer
         else
         {
             int max = (int)Math.Max(1, valueSet.Max());
-            group.Thresholds = Enumerable.Range(0, max + 1).Select(i => (float)i).ToList();
+            group.Thresholds = Enumerable.Range(0, max + 1)
+                .Select(i => (float)i)
+                .Union(valueSet)
+                .ToList();
         }
 
         group.Thresholds.Sort();
+    }
+
+    void AddNearbyThresholdSamples(HashSet<float> valueSet, float lo, float hi)
+    {
+        if (float.IsFinite(lo))
+        {
+            valueSet.Add(Mathf.Round(lo + 0.5f));
+            valueSet.Add(Mathf.Round(lo - 0.5f));
+        }
+
+        if (float.IsFinite(hi))
+        {
+            valueSet.Add(Mathf.Round(hi - 0.5f));
+            valueSet.Add(Mathf.Round(hi + 0.5f));
+        }
     }
 
     List<float> GetCompactThresholds(HashSet<float> existingKeys)
@@ -483,7 +595,7 @@ internal class LayerToBlendTreeOptimizer
 
     #endregion
 
-    #region ªÏ∫œ ˜…˙≥…
+    #region Ê∑∑ÂêàÊ†ëÁîüÊàê
 
     VirtualBlendTree BuildRootBlendTree(List<ParameterGroup> paramGroups)
     {
@@ -515,12 +627,12 @@ internal class LayerToBlendTreeOptimizer
 
         foreach (float threshold in group.Thresholds)
         {
-            var clip = BuildMergedClipForThreshold(group, threshold);
+            var motion = BuildMotionForThreshold(group, threshold);
 
             paramTree.Children = paramTree.Children.Add(
                 new VirtualBlendTree.VirtualChildMotion
                 {
-                    Motion = clip,
+                    Motion = motion,
                     Threshold = threshold
                 });
         }
@@ -528,24 +640,105 @@ internal class LayerToBlendTreeOptimizer
         return paramTree;
     }
 
-    VirtualClip BuildMergedClipForThreshold(ParameterGroup group, float threshold)
+    VirtualMotion BuildMotionForThreshold(ParameterGroup group, float threshold)
     {
-        var mergedClip = VirtualClip.Create($"{SanitizeName(group.ParameterName)}_t{threshold}");
-        bool hasAnyCurve = false;
+        var unconditionalClip = VirtualClip.Create($"{SanitizeName(group.ParameterName)}_t{threshold}");
+        bool hasUnconditionalCurves = false;
+        var gatedMotions = new List<(VirtualMotion ActiveMotion, VirtualMotion InactiveMotion, List<SecondaryCondition> Conditions)>();
 
         foreach (var layer in group.Layers)
         {
-            var motion = ResolveMotionForThreshold(layer, threshold);
-            if (motion == null) continue;
+            var resolved = ResolveStateForThreshold(layer, threshold);
+            if (resolved == null || resolved.ActiveState?.Motion == null) continue;
 
-            if (MergeMotionIntoClip(mergedClip, motion))
-                hasAnyCurve = true;
+            if (resolved.SecondaryConditions.Count == 0)
+            {
+                if (MergeMotionIntoClip(unconditionalClip, resolved.ActiveState.Motion))
+                    hasUnconditionalCurves = true;
+            }
+            else
+            {
+                gatedMotions.Add((
+                    resolved.ActiveState.Motion,
+                    resolved.InactiveState?.Motion ?? GetSharedEmptyClip(),
+                    resolved.SecondaryConditions));
+            }
         }
 
-        if (!hasAnyCurve)
-            return GetSharedEmptyClip();
+        var baseMotion = hasUnconditionalCurves ? (VirtualMotion)unconditionalClip : GetSharedEmptyClip();
+        if (gatedMotions.Count == 0)
+            return baseMotion;
 
-        return mergedClip;
+        var directTree = VirtualBlendTree.Create($"{SanitizeName(group.ParameterName)}_t{threshold}_AND");
+        directTree.BlendType = BlendTreeType.Direct;
+        directTree.BlendParameter = ROOT_PARAM;
+        directTree.BlendParameterY = ROOT_PARAM;
+        directTree.Children = directTree.Children.Add(
+            new VirtualBlendTree.VirtualChildMotion
+            {
+                Motion = baseMotion,
+                DirectBlendParameter = ROOT_PARAM
+            });
+
+        int index = 0;
+        foreach (var gated in gatedMotions)
+        {
+            var gatedMotion = BuildSecondaryConditionTree(
+                gated.ActiveMotion,
+                gated.InactiveMotion,
+                gated.Conditions,
+                $"{SanitizeName(group.ParameterName)}_t{threshold}_gate{index}");
+
+            directTree.Children = directTree.Children.Add(
+                new VirtualBlendTree.VirtualChildMotion
+                {
+                    Motion = gatedMotion,
+                    DirectBlendParameter = ROOT_PARAM
+                });
+            index++;
+        }
+
+        return directTree;
+    }
+
+    VirtualMotion BuildSecondaryConditionTree(
+        VirtualMotion activeMotion,
+        VirtualMotion inactiveMotion,
+        List<SecondaryCondition> conditions,
+        string name)
+    {
+        VirtualMotion current = activeMotion;
+
+        for (int i = conditions.Count - 1; i >= 0; i--)
+        {
+            var condition = conditions[i];
+            var tree = VirtualBlendTree.Create($"{name}_{SanitizeName(condition.ParameterName)}");
+            tree.BlendType = BlendTreeType.Simple1D;
+            tree.BlendParameter = condition.ParameterName;
+            tree.UseAutomaticThresholds = false;
+
+            var lowMotion = condition.ActiveWhenGreater ? inactiveMotion : current;
+            var highMotion = condition.ActiveWhenGreater ? current : inactiveMotion;
+            float lowThreshold = condition.ActiveWhenGreater ? Mathf.Min(0f, condition.Threshold) : Mathf.Min(0f, condition.Threshold - 0.001f);
+            float highThreshold = condition.ActiveWhenGreater ? Mathf.Max(1f, condition.Threshold + 0.001f) : Mathf.Max(1f, condition.Threshold);
+
+            tree.Children = tree.Children.Add(
+                new VirtualBlendTree.VirtualChildMotion
+                {
+                    Motion = lowMotion,
+                    Threshold = lowThreshold
+                });
+            tree.Children = tree.Children.Add(
+                new VirtualBlendTree.VirtualChildMotion
+                {
+                    Motion = highMotion,
+                    Threshold = highThreshold
+                });
+
+            current = tree;
+        }
+
+        return current;
     }
 
     VirtualClip GetSharedEmptyClip()
@@ -555,10 +748,10 @@ internal class LayerToBlendTreeOptimizer
         return _sharedEmptyClip;
     }
 
-    VirtualMotion ResolveMotionForThreshold(AnalyzedLayer layer, float threshold)
+    ResolvedState ResolveStateForThreshold(AnalyzedLayer layer, float threshold)
     {
 
-        var defaultMotion = layer.States.FirstOrDefault(s => s.IsDefault)?.Motion;
+        var defaultState = layer.States.FirstOrDefault(s => s.IsDefault);
 
         foreach (var state in layer.States)
         {
@@ -568,21 +761,47 @@ internal class LayerToBlendTreeOptimizer
 
             if (!layer.IsInverted)
             {
-                if (inRange) return state.Motion;
+                if (inRange)
+                {
+                    return new ResolvedState
+                    {
+                        ActiveState = state,
+                        InactiveState = defaultState,
+                        SecondaryConditions = state.SecondaryConditions
+                    };
+                }
             }
             else
             {
-                if (inRange) return defaultMotion;
+                if (inRange)
+                {
+                    return new ResolvedState
+                    {
+                        ActiveState = defaultState,
+                        InactiveState = state,
+                        SecondaryConditions = state.SecondaryConditions
+                    };
+                }
             }
         }
 
         if (layer.IsInverted)
         {
             var lastConditional = layer.States.LastOrDefault(s => !s.IsDefault);
-            return lastConditional?.Motion ?? defaultMotion;
+            return new ResolvedState
+            {
+                ActiveState = lastConditional ?? defaultState,
+                InactiveState = defaultState,
+                SecondaryConditions = lastConditional?.SecondaryConditions ?? new List<SecondaryCondition>()
+            };
         }
 
-        return defaultMotion;
+        return new ResolvedState
+        {
+            ActiveState = defaultState,
+            InactiveState = defaultState,
+            SecondaryConditions = new List<SecondaryCondition>()
+        };
     }
 
     bool IsThresholdInRange(float threshold, float lo, float hi)
@@ -642,7 +861,7 @@ internal class LayerToBlendTreeOptimizer
 
     #endregion
 
-    #region ◊¢»Î
+    #region Ê≥®ÂÖ•
 
     void InjectBlendTreeLayer(VirtualBlendTree rootBlendTree)
     {
@@ -683,7 +902,7 @@ internal class LayerToBlendTreeOptimizer
 
     #endregion
 
-    #region π§æﬂ
+    #region Â∑•ÂÖ∑
 
     void EnsureFloatParameter(string name, float defaultValue = 0f)
     {
